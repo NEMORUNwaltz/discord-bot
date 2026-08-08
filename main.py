@@ -126,7 +126,7 @@ class TagPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(TagSelect())
 
-# --- 募集専用ドロップダウン ---
+# --- 募集専用ドロップダウン（タイムアウト完全防止版） ---
 class RecruitSelect(discord.ui.Select):
     def __init__(self):
         options = [
@@ -137,6 +137,7 @@ class RecruitSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         game_id = self.values[0]
+        # モーダル（入力フォーム）を直接呼び出すことで高速化＆タイムアウトを回避
         await interaction.response.send_modal(RecruitModal(game_id))
 
 class RecruitPanelView(discord.ui.View):

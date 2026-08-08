@@ -55,37 +55,44 @@ class RecruitModal(discord.ui.Modal):
 
         await interaction.response.send_message(content)
 
-# パネルのボタン設定
+# タグ選択用ドロップダウン
+class TagSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label=name, value=key, emoji="🎮")
+            for key, name in GAMES.items()
+        ]
+        super().__init__(placeholder="🎮 タグを登録/解除するゲームを選択...", min_values=1, max_values=1, options=options, custom_id="tag_select")
+
+    async def callback(self, interaction: discord.Interaction):
+        game_id = self.values[0]
+        user_id = interaction.user.id
+        if user_id in USER_TAGS[game_id]:
+            USER_TAGS[game_id].remove(user_id)
+            await interaction.response.send_message(f"❌ `{GAMES[game_id]}` のタグを外したよ！", ephemeral=True)
+        else:
+            USER_TAGS[game_id].add(user_id)
+            await interaction.response.send_message(f"✅ `{GAMES[game_id]}` のタグを登録したよ！", ephemeral=True)
+
+# 募集選択用ドロップダウン
+class RecruitSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label=f"{name} を募集する", value=key, emoji="📢")
+            for key, name in GAMES.items()
+        ]
+        super().__init__(placeholder="📢 募集したいゲームを選択...", min_values=1, max_values=1, options=options, custom_id="recruit_select")
+
+    async def callback(self, interaction: discord.Interaction):
+        game_id = self.values[0]
+        await interaction.response.send_modal(RecruitModal(game_id))
+
+# パネル View
 class ControlPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        # タグ登録ボタンを作成
-        for key, name in GAMES.items():
-            btn = discord.ui.Button(label=f"🎮 {name}", style=discord.ButtonStyle.secondary, custom_id=f"tag_{key}")
-            btn.callback = self.make_tag_callback(key)
-            self.add_item(btn)
-
-        # 募集ボタンを作成
-        for key, name in GAMES.items():
-            btn = discord.ui.Button(label=f"📢 {name}募集", style=discord.ButtonStyle.success, custom_id=f"recruit_{key}")
-            btn.callback = self.make_recruit_callback(key)
-            self.add_item(btn)
-
-    def make_tag_callback(self, game_id):
-        async def callback(interaction: discord.Interaction):
-            user_id = interaction.user.id
-            if user_id in USER_TAGS[game_id]:
-                USER_TAGS[game_id].remove(user_id)
-                await interaction.response.send_message(f"❌ `{GAMES[game_id]}` のタグを外したよ！", ephemeral=True)
-            else:
-                USER_TAGS[game_id].add(user_id)
-                await interaction.response.send_message(f"✅ `{GAMES[game_id]}` のタグを登録したよ！", ephemeral=True)
-        return callback
-
-    def make_recruit_callback(self, game_id):
-        async def callback(interaction: discord.Interaction):
-            await interaction.response.send_modal(RecruitModal(game_id))
-        return callback
+        self.add_item(TagSelect())
+        self.add_item(RecruitSelect())
 
 class GameBot(commands.Bot):
     def __init__(self):
@@ -104,8 +111,8 @@ bot = GameBot()
 async def setup(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎮 ゲームタグ設定 ＆ メンバー募集パネル",
-        description="・**グレーのボタン**: タグの登録/解除（押すたびに切り替わります）\n"
-                    "・**緑色のボタン**: 該当ゲームのプレイヤー全員にメンション募集を飛ばします",
+        description="・**🎮 タグ選択**: ゲームを選んでタグの登録/解除を行います（押すごとに切り替え）\n"
+                    "・**📢 募集選択**: ゲームを選ぶと募集フォームが開きます",
         color=discord.Color.blue()
     )
     await interaction.channel.send(embed=embed, view=ControlPanelView())

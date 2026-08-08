@@ -55,14 +55,14 @@ class RecruitModal(discord.ui.Modal):
 
         await interaction.response.send_message(content)
 
-# タグ選択用ドロップダウン
+# --- ① タグ専用コンポーネント ---
 class TagSelect(discord.ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label=name, value=key, emoji="🎮")
             for key, name in GAMES.items()
         ]
-        super().__init__(placeholder="🎮 タグを登録/解除するゲームを選択...", min_values=1, max_values=1, options=options, custom_id="tag_select")
+        super().__init__(placeholder="🎮 タグを登録/解除するゲームを選択...", min_values=1, max_values=1, options=options, custom_id="tag_select_only")
 
     async def callback(self, interaction: discord.Interaction):
         game_id = self.values[0]
@@ -74,26 +74,30 @@ class TagSelect(discord.ui.Select):
             USER_TAGS[game_id].add(user_id)
             await interaction.response.send_message(f"✅ `{GAMES[game_id]}` のタグを登録したよ！", ephemeral=True)
 
-# 募集選択用ドロップダウン
+class TagPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(TagSelect())
+
+# --- ② 募集専用コンポーネント ---
 class RecruitSelect(discord.ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label=f"{name} を募集する", value=key, emoji="📢")
             for key, name in GAMES.items()
         ]
-        super().__init__(placeholder="📢 募集したいゲームを選択...", min_values=1, max_values=1, options=options, custom_id="recruit_select")
+        super().__init__(placeholder="📢 募集したいゲームを選択...", min_values=1, max_values=1, options=options, custom_id="recruit_select_only")
 
     async def callback(self, interaction: discord.Interaction):
         game_id = self.values[0]
         await interaction.response.send_modal(RecruitModal(game_id))
 
-# パネル View
-class ControlPanelView(discord.ui.View):
+class RecruitPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(TagSelect())
         self.add_item(RecruitSelect())
 
+# --- Bot本体 ---
 class GameBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -101,22 +105,36 @@ class GameBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        self.add_view(ControlPanelView())
+        # 永続化のために両方のViewを登録
+        self.add_view(TagPanelView())
+        self.add_view(RecruitPanelView())
         await self.tree.sync()
 
 bot = GameBot()
 
-@bot.tree.command(name="setup", description="コントロールパネルを設置します")
+# コマンド①：タグ登録パネル設置
+@bot.tree.command(name="setup_tag", description="タグ登録専用パネルを設置します")
 @app_commands.checks.has_permissions(administrator=True)
-async def setup(interaction: discord.Interaction):
+async def setup_tag(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="🎮 ゲームタグ設定 ＆ メンバー募集パネル",
-        description="・**🎮 タグ選択**: ゲームを選んでタグの登録/解除を行います（押すごとに切り替え）\n"
-                    "・**📢 募集選択**: ゲームを選ぶと募集フォームが開きます",
+        title="🎮 ゲームタグ設定パネル",
+        description="メニューからゲームを選択すると、タグの登録/解除ができます。（押すごとに切り替え）",
         color=discord.Color.blue()
     )
-    await interaction.channel.send(embed=embed, view=ControlPanelView())
-    await interaction.response.send_message("パネルを設置したよ！", ephemeral=True)
+    await interaction.channel.send(embed=embed, view=TagPanelView())
+    await interaction.response.send_message("タグ設定パネルを設置したよ！", ephemeral=True)
+
+# コマンド②：メンバー募集パネル設置
+@bot.tree.command(name="setup_recruit", description="メンバー募集専用パネルを設置します")
+@app_commands.checks.has_permissions(administrator=True)
+async def setup_recruit(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="📢 メンバー募集パネル",
+        description="メニューからゲームを選択すると、募集入力フォームが開きます。",
+        color=discord.Color.green()
+    )
+    await interaction.channel.send(embed=embed, view=RecruitPanelView())
+    await interaction.response.send_message("募集パネルを設置したよ！", ephemeral=True)
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)

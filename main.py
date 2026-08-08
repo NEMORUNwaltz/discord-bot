@@ -43,22 +43,23 @@ class RecruitModal(discord.ui.Modal):
         self.add_item(self.message_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
         target_users = USER_TAGS.get(self.game_id, set())
 
+        # タグを持っているユーザーがいない場合
         if not target_users:
-            await interaction.followup.send(
-                f"⚠️ 現在 `{GAMES[self.game_id]}` のタグを持っているユーザーがいません。", 
+            await interaction.response.send_message(
+                f"⚠️ 現在 `{GAMES[self.game_id]}` のタグを持っているユーザーがいません。\n（※Botが再起動した場合はタグを登録し直してください）", 
                 ephemeral=True
             )
             return
 
+        # メンションを作成して投稿
         mentions = " ".join([f"<@{user_id}>" for user_id in target_users])
         content = f"📢 **【{GAMES[self.game_id]} 募集】** (送信者: {interaction.user.mention})\n" \
                   f"メッセージ: {self.message_input.value}\n\n" \
                   f"通知: {mentions}"
 
-        await interaction.followup.send(content)
+        await interaction.response.send_message(content)
 
 # --- 登録・解除の操作ボタンView ---
 class TagActionView(discord.ui.View):
@@ -126,7 +127,7 @@ class TagPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(TagSelect())
 
-# --- 募集専用ドロップダウン（タイムアウト完全防止版） ---
+# --- 募集専用ドロップダウン ---
 class RecruitSelect(discord.ui.Select):
     def __init__(self):
         options = [
@@ -137,7 +138,6 @@ class RecruitSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         game_id = self.values[0]
-        # モーダル（入力フォーム）を直接呼び出すことで高速化＆タイムアウトを回避
         await interaction.response.send_modal(RecruitModal(game_id))
 
 class RecruitPanelView(discord.ui.View):

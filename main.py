@@ -1,36 +1,74 @@
 import os
+import json
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-# 13タイトルの設定
+# 13タイトルの設定（ゲーム名と個別のアイコンを設定）
 GAMES = {
-    "apex": "Apex",
-    "ow2": "OW2",
-    "valo": "VALO",
-    "mc_java": "MINECRAFT JAVA",
-    "mc_be": "MINECRAFT BE",
-    "mahjong": "雀魂",
-    "lol": "LOL",
-    "genshin": "原神",
-    "fortnite": "FORTNITE",
-    "terraria": "TERRARIA",
-    "mh_wilds": "MH:WILDS",
-    "osu": "OSU!",
-    "eft": "EFT"
+    "apex": {"name": "Apex", "emoji": "🔫"},
+    "ow2": {"name": "OW2", "emoji": "🛡️"},
+    "valo": {"name": "VALO", "emoji": "🎯"},
+    "mc_java": {"name": "MINECRAFT JAVA", "emoji": "⛏️"},
+    "mc_be": {"name": "MINECRAFT BE", "emoji": "🧱"},
+    "mahjong": {"name": "雀魂", "emoji": "🀄"},
+    "lol": {"name": "LOL", "emoji": "⚔️"},
+    "genshin": {"name": "原神", "emoji": "✨"},
+    "fortnite": {"name": "FORTNITE", "emoji": "🪂"},
+    "terraria": {"name": "TERRARIA", "emoji": "🌳"},
+    "mh_wilds": {"name": "MH:WILDS", "emoji": "🐉"},
+    "osu": {"name": "OSU!", "emoji": "🎵"},
+    "eft": {"name": "EFT", "emoji": "🪖"}
 }
 
-# タグ保存用の辞書データ
+# 募集メッセージが飛ばされるチャンネル名（Discord側のチャンネル名と完全に一致させてください）
+RECRUIT_CHANNEL_NAME = "❗募集一覧"
+DATA_CHANNEL_NAME = "bot-data-store"  # 自動生成されるバックアップ用隠しチャンネル
+
 USER_TAGS = {key: set() for key in GAMES.keys()}
 
-# ユーザーの所有タグ一覧を取得するヘルパー関数
 def get_user_tag_names(user_id: int) -> list:
-    return [GAMES[g_id] for g_id, users in USER_TAGS.items() if user_id in users]
+    return [data["name"] for g_id, data in GAMES.items() if user_id in USER_TAGS.get(g_id, set())]
+
+# --- データの自動保存・復元処理（バックアップ機能） ---
+async def save_tags_to_discord(guild: discord.Guild):
+    try:
+        channel = discord.utils.get(guild.text_channels, name=DATA_CHANNEL_NAME)
+        if not channel:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            channel = await guild.create_text_channel(DATA_CHANNEL_NAME, overwrites=overwrites)
+
+        data_to_save = {k: list(v) for k, v in USER_TAGS.items()}
+        json_str = json.dumps(data_to_save)
+        await channel.send(f"```json\n{json_str}\n```")
+    except Exception as e:
+        print(f"データ保存エラー: {e}")
+
+async def load_tags_from_discord(guild: discord.Guild):
+    try:
+        channel = discord.utils.get(guild.text_channels, name=DATA_CHANNEL_NAME)
+        if not channel:
+            return
+        async for msg in channel.history(limit=10):
+            if msg.content.startswith("```json"):
+                raw_json = msg.content.replace("```json\n", "").replace("\n```", "")
+                data = json.loads(raw_json)
+                for k, v in data.items():
+                    if k in USER_TAGS:
+                        USER_TAGS[k] = set(v)
+                print("タグデータを正常に復元しました！")
+                break
+    except Exception as e:
+        print(f"データ復元エラー: {e}")
 
 # 募集用モーダル（ポップアップ）
 class RecruitModal(discord.ui.Modal):
     def __init__(self, game_id: str):
-        super().__init__(title=f"{GAMES[game_id]} メンバー募集")
+        game_name = GAMES[game_id]["name"]
+        super().__init__(title=f"{game_name} メンバー募集")
         self.game_id = game_id
 
         self.message_input = discord.ui.TextInput(
@@ -44,22 +82,35 @@ class RecruitModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         target_users = USER_TAGS.get(self.game_id, set())
+        game_name = GAMES[self.game_id]["name"]
 
-        # タグを持っているユーザーがいない場合
         if not target_users:
             await interaction.response.send_message(
-                f"⚠️ 現在 `{GAMES[self.game_id]}` のタグを持っているユーザーがいません。\n（※Botが再起動した場合はタグを登録し直してください）", 
+                f"⚠️ 現在 `{game_name}` のタグを持っているユーザーがいません。", 
                 ephemeral=True
             )
             return
 
-        # メンションを作成して投稿
         mentions = " ".join([f"<@{user_id}>" for user_id in target_users])
-        content = f"📢 **【{GAMES[self.game_id]} 募集】** (送信者: {interaction.user.mention})\n" \
+        content = f"📢 **【{game_name} 募集】** (送信者: {interaction.user.mention})\n" \
                   f"メッセージ: {self.message_input.value}\n\n" \
                   f"通知: {mentions}"
 
-        await interaction.response.send_message(content)
+        # 投稿先の「❗募集一覧」チャンネルを探す
+        guild = interaction.guild
+        target_channel = discord.utils.get(guild.text_channels, name=RECRUIT_CHANNEL_NAME) if guild else None
+
+        if target_channel:
+            # 該当チャンネルに募集メッセージを送信
+            await target_channel.send(content)
+            # パネル側には自分にしか見えない完了メッセージを表示
+            await interaction.response.send_message(
+                f"✅ <#{target_channel.id}> に募集を投稿したよ！", 
+                ephemeral=True
+            )
+        else:
+            # もしチャンネルが見つからない場合はその場に投稿
+            await interaction.response.send_message(content)
 
 # --- 登録・解除の操作ボタンView ---
 class TagActionView(discord.ui.View):
@@ -73,11 +124,15 @@ class TagActionView(discord.ui.View):
         user_id = interaction.user.id
         USER_TAGS[self.game_id].add(user_id)
         
+        if interaction.guild:
+            await save_tags_to_discord(interaction.guild)
+
         my_tags = get_user_tag_names(user_id)
         tag_str = ", ".join(my_tags) if my_tags else "なし"
+        game_name = GAMES[self.game_id]["name"]
         
         await interaction.followup.send(
-            f"✅ `{GAMES[self.game_id]}` のタグを**登録**したよ！\n\n📋 **【あなたの所持タグ】**: {tag_str}",
+            f"✅ `{game_name}` のタグを**登録**したよ！\n\n📋 **【あなたの所持タグ】**: {tag_str}",
             ephemeral=True
         )
 
@@ -88,11 +143,15 @@ class TagActionView(discord.ui.View):
         if user_id in USER_TAGS[self.game_id]:
             USER_TAGS[self.game_id].remove(user_id)
             
+        if interaction.guild:
+            await save_tags_to_discord(interaction.guild)
+
         my_tags = get_user_tag_names(user_id)
         tag_str = ", ".join(my_tags) if my_tags else "なし"
+        game_name = GAMES[self.game_id]["name"]
         
         await interaction.followup.send(
-            f"❌ `{GAMES[self.game_id]}` のタグを**解除**したよ！\n\n📋 **【あなたの所持タグ】**: {tag_str}",
+            f"❌ `{game_name}` のタグを**解除**したよ！\n\n📋 **【あなたの所持タグ】**: {tag_str}",
             ephemeral=True
         )
 
@@ -100,11 +159,11 @@ class TagActionView(discord.ui.View):
 class TagSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label=name, value=key, emoji="🎮")
-            for key, name in GAMES.items()
+            discord.SelectOption(label=info["name"], value=key, emoji=info["emoji"])
+            for key, info in GAMES.items()
         ]
         options.append(discord.SelectOption(label="📋 自分の所持タグを確認する", value="check_my_tags", emoji="🔍"))
-        super().__init__(placeholder="🎮 ゲームを選択してタグ設定...", min_values=1, max_values=1, options=options, custom_id="tag_select_v2")
+        super().__init__(placeholder="🎮 ゲームを選択してタグ設定...", min_values=1, max_values=1, options=options, custom_id="tag_select_v5")
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -115,7 +174,7 @@ class TagSelect(discord.ui.Select):
             tag_str = ", ".join(my_tags) if my_tags else "なし"
             await interaction.followup.send(f"📋 **【現在所持しているタグ】**\n{tag_str}", ephemeral=True)
         else:
-            game_name = GAMES[selected]
+            game_name = GAMES[selected]["name"]
             await interaction.followup.send(
                 f"🎮 **`{game_name}`** のタグ設定を選択してください：",
                 view=TagActionView(selected),
@@ -131,10 +190,10 @@ class TagPanelView(discord.ui.View):
 class RecruitSelect(discord.ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label=f"{name} を募集する", value=key, emoji="📢")
-            for key, name in GAMES.items()
+            discord.SelectOption(label=f"{info['name']} を募集する", value=key, emoji=info["emoji"])
+            for key, info in GAMES.items()
         ]
-        super().__init__(placeholder="📢 募集したいゲームを選択...", min_values=1, max_values=1, options=options, custom_id="recruit_select_v2")
+        super().__init__(placeholder="📢 募集したいゲームを選択...", min_values=1, max_values=1, options=options, custom_id="recruit_select_v5")
 
     async def callback(self, interaction: discord.Interaction):
         game_id = self.values[0]
@@ -158,6 +217,12 @@ class GameBot(commands.Bot):
         await self.tree.sync()
 
 bot = GameBot()
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    for guild in bot.guilds:
+        await load_tags_from_discord(guild)
 
 @bot.tree.command(name="setup_tag", description="タグ登録専用パネルを設置します")
 @app_commands.checks.has_permissions(administrator=True)

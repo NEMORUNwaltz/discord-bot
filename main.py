@@ -105,36 +105,37 @@ class GameBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # 永続化のために両方のViewを登録
         self.add_view(TagPanelView())
         self.add_view(RecruitPanelView())
         await self.tree.sync()
 
 bot = GameBot()
 
-# コマンド①：タグ登録パネル設置
+# コマンド①：タグ登録パネル設置（タイムアウト防止対策済み）
 @bot.tree.command(name="setup_tag", description="タグ登録専用パネルを設置します")
 @app_commands.checks.has_permissions(administrator=True)
 async def setup_tag(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)  # 即座に処理中レスポンスを返す
     embed = discord.Embed(
         title="🎮 ゲームタグ設定パネル",
         description="メニューからゲームを選択すると、タグの登録/解除ができます。（押すごとに切り替え）",
         color=discord.Color.blue()
     )
     await interaction.channel.send(embed=embed, view=TagPanelView())
-    await interaction.response.send_message("タグ設定パネルを設置したよ！", ephemeral=True)
+    await interaction.followup.send("タグ設定パネルを設置したよ！")
 
-# コマンド②：メンバー募集パネル設置
+# コマンド②：メンバー募集パネル設置（タイムアウト防止対策済み）
 @bot.tree.command(name="setup_recruit", description="メンバー募集専用パネルを設置します")
 @app_commands.checks.has_permissions(administrator=True)
 async def setup_recruit(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)  # 即座に処理中レスポンスを返す
     embed = discord.Embed(
         title="📢 メンバー募集パネル",
         description="メニューからゲームを選択すると、募集入力フォームが開きます。",
         color=discord.Color.green()
     )
     await interaction.channel.send(embed=embed, view=RecruitPanelView())
-    await interaction.response.send_message("募集パネルを設置したよ！", ephemeral=True)
+    await interaction.followup.send("募集パネルを設置したよ！")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)

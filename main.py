@@ -18,7 +18,8 @@ GAMES = {
     "terraria": {"name": "TERRARIA", "emoji": "🌳"},
     "mh_wilds": {"name": "MH:WILDS", "emoji": "🐉"},
     "osu": {"name": "OSU!", "emoji": "🎵"},
-    "eft": {"name": "EFT", "emoji": "🪖"}
+    "eft": {"name": "EFT", "emoji": "🪖"},
+    "sf6": {"name": "SF6", "emoji": "🥊"},
 }
 
 # 募集メッセージが飛ばされるチャンネル名（Discord側のチャンネル名と完全に一致させてください）

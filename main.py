@@ -1,10 +1,28 @@
 import os
 import json
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-# 14タイトルの設定（SF6追加済み）
+# --- Render & UptimeRobot 用のダミーWebサーバー ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def run_web_server():
+    port = int(os.getenv("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    print(f"Webサーバーをポート {port} で起動しました。")
+    server.serve_forever()
+
+# バックグラウンドでWebサーバーを起動（Renderのタイムアウト回避）
+threading.Thread(target=run_web_server, daemon=True).start()
+
+# --- 14タイトルの設定（SF6追加済み） ---
 GAMES = {
     "apex": {"name": "Apex", "emoji": "🔫"},
     "ow2": {"name": "OW2", "emoji": "🛡️"},
@@ -162,7 +180,6 @@ class TagSelect(discord.ui.Select):
         super().__init__(placeholder="🎮 ゲームを選択してタグ設定...", min_values=1, max_values=1, options=options, custom_id="tag_select_v6")
 
     async def callback(self, interaction: discord.Interaction):
-        # 選択状態をリセットするためにメッセージを更新する
         await interaction.response.edit_message(view=TagPanelView())
         
         selected = self.values[0]
@@ -195,7 +212,6 @@ class RecruitSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         game_id = self.values[0]
-        # モーダルを開くと同時にドロップダウンの選択状態を初期化
         await interaction.response.send_modal(RecruitModal(game_id))
         await interaction.message.edit(view=RecruitPanelView())
 
@@ -249,4 +265,7 @@ async def setup_recruit(interaction: discord.Interaction):
     await interaction.followup.send("募集パネルを設置したよ！", ephemeral=True)
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-bot.run(TOKEN)
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("エラー: DISCORD_TOKEN が設定されていません。")

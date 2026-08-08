@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-# 13タイトルの設定（ゲーム名と個別のアイコンを設定）
+# 14タイトルの設定（SF6追加済み）
 GAMES = {
     "apex": {"name": "Apex", "emoji": "🔫"},
     "ow2": {"name": "OW2", "emoji": "🛡️"},
@@ -19,12 +19,11 @@ GAMES = {
     "mh_wilds": {"name": "MH:WILDS", "emoji": "🐉"},
     "osu": {"name": "OSU!", "emoji": "🎵"},
     "eft": {"name": "EFT", "emoji": "🪖"},
-    "sf6": {"name": "SF6", "emoji": "🥊"},
+    "sf6": {"name": "SF6", "emoji": "🥊"}
 }
 
-# 募集メッセージが飛ばされるチャンネル名（Discord側のチャンネル名と完全に一致させてください）
 RECRUIT_CHANNEL_NAME = "❗募集一覧"
-DATA_CHANNEL_NAME = "bot-data-store"  # 自動生成されるバックアップ用隠しチャンネル
+DATA_CHANNEL_NAME = "bot-data-store"
 
 USER_TAGS = {key: set() for key in GAMES.keys()}
 
@@ -97,20 +96,16 @@ class RecruitModal(discord.ui.Modal):
                   f"メッセージ: {self.message_input.value}\n\n" \
                   f"通知: {mentions}"
 
-        # 投稿先の「❗募集一覧」チャンネルを探す
         guild = interaction.guild
         target_channel = discord.utils.get(guild.text_channels, name=RECRUIT_CHANNEL_NAME) if guild else None
 
         if target_channel:
-            # 該当チャンネルに募集メッセージを送信
             await target_channel.send(content)
-            # パネル側には自分にしか見えない完了メッセージを表示
             await interaction.response.send_message(
                 f"✅ <#{target_channel.id}> に募集を投稿したよ！", 
                 ephemeral=True
             )
         else:
-            # もしチャンネルが見つからない場合はその場に投稿
             await interaction.response.send_message(content)
 
 # --- 登録・解除の操作ボタンView ---
@@ -164,10 +159,12 @@ class TagSelect(discord.ui.Select):
             for key, info in GAMES.items()
         ]
         options.append(discord.SelectOption(label="📋 自分の所持タグを確認する", value="check_my_tags", emoji="🔍"))
-        super().__init__(placeholder="🎮 ゲームを選択してタグ設定...", min_values=1, max_values=1, options=options, custom_id="tag_select_v5")
+        super().__init__(placeholder="🎮 ゲームを選択してタグ設定...", min_values=1, max_values=1, options=options, custom_id="tag_select_v6")
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        # 選択状態をリセットするためにメッセージを更新する
+        await interaction.response.edit_message(view=TagPanelView())
+        
         selected = self.values[0]
 
         if selected == "check_my_tags":
@@ -194,11 +191,13 @@ class RecruitSelect(discord.ui.Select):
             discord.SelectOption(label=f"{info['name']} を募集する", value=key, emoji=info["emoji"])
             for key, info in GAMES.items()
         ]
-        super().__init__(placeholder="📢 募集したいゲームを選択...", min_values=1, max_values=1, options=options, custom_id="recruit_select_v5")
+        super().__init__(placeholder="📢 募集したいゲームを選択...", min_values=1, max_values=1, options=options, custom_id="recruit_select_v6")
 
     async def callback(self, interaction: discord.Interaction):
         game_id = self.values[0]
+        # モーダルを開くと同時にドロップダウンの選択状態を初期化
         await interaction.response.send_modal(RecruitModal(game_id))
+        await interaction.message.edit(view=RecruitPanelView())
 
 class RecruitPanelView(discord.ui.View):
     def __init__(self):

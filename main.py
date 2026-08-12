@@ -57,8 +57,10 @@ async def load_tags_from_discord(guild: discord.Guild):
             return
         async for msg in channel.history(limit=10):
             if msg.content.startswith("```json"):
-                # ↓ここ（76行目）を改行なしで1行に修正します
-                raw_json = msg.content.replace("```json\n", "").replace("\n```", "")
+                # 安全な取り除き方に変更（改行事故を防止）
+                raw_json = msg.content.strip()
+                raw_json = raw_json.removeprefix("```json").removesuffix("```").strip()
+                
                 data = json.loads(raw_json)
                 for k, v in data.items():
                     if k in USER_TAGS:

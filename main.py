@@ -71,6 +71,16 @@ async def load_tags_from_discord(guild: discord.Guild):
         if not channel:
             return
         async for msg in channel.history(limit=10):
-            if msg.content.startswith("```json"):
-                # 安全な取り除き方に修正（改行事故を完全に防止）
-                raw_json = msg.content.strip().removeprefix("
+            # 文字コード chr(96) はバッククォート(`)のことです
+            # コード内に直接記号を書かないことで、コピペ時の改行破壊事故を100%防止します
+            bq = chr(96)
+            if msg.content.startswith(bq * 3 + "json"):
+                clean_text = msg.content.replace(bq, "").replace("json", "").strip()
+                data = json.loads(clean_text)
+                for k, v in data.items():
+                    if k in USER_TAGS:
+                        USER_TAGS[k] = set(v)
+                print("タグデータを正常に復元しました！")
+                break
+    except Exception as e:
+        print(f"データ復元エラー: {e}")

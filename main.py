@@ -50,21 +50,23 @@ def get_user_tag_names(user_id: int) -> list:
     return [data["name"] for g_id, data in GAMES.items() if user_id in USER_TAGS.get(g_id, set())]
 
 # --- データの自動保存・復元処理（バックアップ機能） ---
-async def save_tags_to_discord(guild: discord.Guild):
+async def load_tags_from_discord(guild: discord.Guild):
     try:
         channel = discord.utils.get(guild.text_channels, name=DATA_CHANNEL_NAME)
         if not channel:
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-            }
-            channel = await guild.create_text_channel(DATA_CHANNEL_NAME, overwrites=overwrites)
-
-        data_to_save = {k: list(v) for k, v in USER_TAGS.items()}
-        json_str = json.dumps(data_to_save)
-        await channel.send(f"```json\n{json_str}\n```")
+            return
+        async for msg in channel.history(limit=10):
+            if msg.content.startswith("```json"):
+                # ↓ここ（76行目）を改行なしで1行に修正します
+                raw_json = msg.content.replace("```json\n", "").replace("\n```", "")
+                data = json.loads(raw_json)
+                for k, v in data.items():
+                    if k in USER_TAGS:
+                        USER_TAGS[k] = set(v)
+                print("タグデータを正常に復元しました！")
+                break
     except Exception as e:
-        print(f"データ保存エラー: {e}")
+        print(f"データ復元エラー: {e}")
 
 async def load_tags_from_discord(guild: discord.Guild):
     try:
